@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ciudad de la Furia – Cartografía de Identidades</title>
+<link href="https://fonts.googleapis.com/css2?family=Lobster&family=Nunito:wght@400;700;800&family=Fredoka+One&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{
+  background:#3cb884;
+  min-height:100vh;
+  display:flex;flex-direction:column;align-items:center;
+  font-family:'Nunito',sans-serif;
+  overflow-x:hidden;
+}
+body::before{
+  content:'';position:fixed;inset:0;
+  background-image:radial-gradient(circle,rgba(255,255,255,0.07) 1px,transparent 1px);
+  background-size:24px 24px;
+  pointer-events:none;z-index:0;
+}
+.page{
+  position:relative;z-index:1;
+  width:100%;max-width:700px;
+  padding:24px 16px 32px;
+  display:flex;flex-direction:column;align-items:center;gap:12px;
+}
+.eyebrow{
+  font-size:10px;font-weight:800;letter-spacing:5px;
+  text-transform:uppercase;color:rgba(255,255,255,.55);
+}
+.poster-title{
+  font-family:'Fredoka One',cursive;font-size:clamp(20px,3.5vw,30px);
+  color:#fff;letter-spacing:2px;text-shadow:1px 2px 0 rgba(0,0,0,.12);
+  text-align:center;line-height:1;
+}
+.poster-title em{color:#ffe14d;font-style:normal}
+
+/* ── MAP ── */
+.map-container{width:100%;max-width:560px;position:relative}
+.map-svg{width:100%;height:auto;display:block;overflow:visible}
+
+/* ── RELATION LINES ── */
+.rel-line{
+  fill:none;
+  stroke-linecap:round;
+  opacity:0;
+  transition:opacity .4s ease;
+  pointer-events:visibleStroke;
+  cursor:pointer;
+}
+.rel-line.show{opacity:1}
+.rel-line.alianza   {stroke:#6ef07a;stroke-width:2.5}
+.rel-line.tension   {stroke:#ff7070;stroke-width:2.5}
+.rel-line.disputa   {stroke:#ffe050;stroke-width:2.5}
+.rel-line.conv      {stroke:#70d8ff;stroke-width:2.5}
+
+/* animated dash */
+@keyframes flowLine{to{stroke-dashoffset:-60}}
+.rel-line.show{animation:flowLine 1.8s linear infinite}
+
+.rel-line.alianza.show {stroke-dasharray:14 8}
+.rel-line.tension.show {stroke-dasharray:6 8}
+.rel-line.disputa.show {stroke-dasharray:10 6}
+.rel-line.conv.show    {stroke-dasharray:18 6}
+
+/* glow on hover */
+.rel-line:hover{stroke-width:5;filter:drop-shadow(0 0 5px currentColor)}
+
+/* ── ACTOR ICONS ── */
+.actor{cursor:pointer}
+.actor .bubble{
+  transition:transform .22s cubic-bezier(.34,1.56,.64,1);
+  transform-box:fill-box;transform-origin:center;
+}
+.actor:hover .bubble{transform:scale(1.28)}
+.actor.lit .bubble{filter:drop-shadow(0 0 8px #fff)}
+.actor.dim .bubble{opacity:.25}
+.actor.dim text{opacity:.25}
+
+@keyframes popIn{
+  0%{opacity:0;transform:scale(0) translateY(8px)}
+  70%{transform:scale(1.1) translateY(-2px)}
+  100%{opacity:1;transform:scale(1) translateY(0)}
+}
+.actor{opacity:0;animation:popIn .45s cubic-bezier(.34,1.56,.64,1) both}
+
+/* ── TOOLTIP ── */
+.tip{
+  position:fixed;z-index:9999;
+  pointer-events:none;
+  opacity:0;transform:translateX(-50%) translateY(-8px) scale(.9);
+  transition:opacity .15s,transform .15s;
+  max-width:230px;min-width:185px;
+}
+.tip.on{opacity:1;transform:translateX(-50%) translateY(0) scale(1)}
+.tip-box{
+  background:#0d1f0d;border-radius:14px;
+  padding:12px 14px 10px;
+  box-shadow:0 10px 30px rgba(0,0,0,.55);position:relative;
+}
+.tip-box::after{
+  content:'';position:absolute;top:100%;left:50%;
+  transform:translateX(-50%);
+  border:6px solid transparent;border-top-color:#0d1f0d;
+}
+.tip-emoji{font-size:24px;line-height:1;display:block;margin-bottom:4px}
+.tip-group{font-size:9px;font-weight:800;letter-spacing:3px;text-transform:uppercase;color:rgba(255,255,255,.4);margin-bottom:2px}
+.tip-name{font-family:'Fredoka One',cursive;font-size:16px;color:#fff;margin-bottom:4px;line-height:1.1}
+.tip-desc{font-size:11px;color:rgba(255,255,255,.7);line-height:1.5;margin-bottom:6px}
+.tip-tags{display:flex;flex-wrap:wrap;gap:3px}
+.tip-tag{font-size:9px;font-weight:700;letter-spacing:1px;padding:2px 6px;border-radius:20px;border:1px solid;text-transform:uppercase}
+
+/* ── LINE TOOLTIP ── */
+.line-tip{
+  position:fixed;z-index:9999;
+  pointer-events:none;opacity:0;
+  transform:translateX(-50%) translateY(-8px) scale(.9);
+  transition:opacity .15s,transform .15s;
+  min-width:170px;
+}
+.line-tip.on{opacity:1;transform:translateX(-50%) translateY(0) scale(1)}
+.line-tip-box{
+  background:#0d1f0d;border-radius:10px;
+  padding:8px 12px 7px;
+  box-shadow:0 8px 24px rgba(0,0,0,.5);position:relative;
+}
+.line-tip-box::after{
+  content:'';position:absolute;top:100%;left:50%;
+  transform:translateX(-50%);
+  border:5px solid transparent;border-top-color:#0d1f0d;
+}
+.lt-type{font-size:9px;font-weight:800;letter-spacing:2px;text-transform:uppercase;margin-bottom:3px}
+.lt-actors{font-family:'Fredoka One',cursive;font-size:13px;color:#fff;line-height:1.2;margin-bottom:3px}
+.lt-desc{font-size:10px;color:rgba(255,255,255,.6);line-height:1.4}
+
+/* ── LEGEND ── */
+.legend{
+  display:flex;gap:14px;flex-wrap:wrap;justify-content:center;
+  padding:8px 14px;background:rgba(0,0,0,.18);
+  border-radius:50px;font-size:10px;font-weight:800;
+  letter-spacing:1px;text-transform:uppercase;color:#fff;
+}
+.leg-item{display:flex;align-items:center;gap:5px;cursor:pointer;opacity:.7;transition:opacity .2s}
+.leg-item:hover,.leg-item.active{opacity:1}
+.leg-dot{width:18px;height:3px;border-radius:2px}
+.leg-dot.alianza{background:#6ef07a}
+.leg-dot.tension{background:#ff7070}
+.leg-dot.disputa{background:#ffe050}
+.leg-dot.conv   {background:#70d8ff}
+
+/* ── CONTROLS ── */
+.controls{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+.ctrl-btn{
+  background:rgba(255,255,255,.15);color:#fff;border:1.5px solid rgba(255,255,255,.3);
+  font-family:'Fredoka One',cursive;font-size:13px;letter-spacing:1px;
+  padding:8px 18px;border-radius:50px;cursor:pointer;
+  transition:all .2s;display:flex;align-items:center;gap:7px;
+}
+.ctrl-btn:hover{background:rgba(255,255,255,.25)}
+.ctrl-btn.on{background:#ffe14d;color:#1a2e10;border-color:#ffe14d;box-shadow:0 3px 0 #c8a800}
+
+/* ── RELATIONS PANEL ── */
+.rel-panel{
+  display:none;background:#0d1f0d;border-radius:16px;
+  padding:14px 14px 10px;width:100%;max-width:560px;
+  box-shadow:0 8px 28px rgba(0,0,0,.35);
+}
+.rel-panel.on{display:block;animation:slideUp .3s ease both}
+@keyframes slideUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+.rp-title{font-family:'Fredoka One',cursive;font-size:14px;color:#ffe14d;text-align:center;margin-bottom:10px}
+.rp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px}
+.rp-card{
+  background:rgba(255,255,255,.05);border-radius:9px;padding:8px 9px;
+  border:1px solid rgba(255,255,255,.07);cursor:pointer;transition:background .2s;
+}
+.rp-card:hover{background:rgba(255,255,255,.1)}
+.rp-actors{font-family:'Fredoka One',cursive;font-size:11px;color:#fff;line-height:1.3;margin-bottom:3px}
+.rp-type{display:inline-block;font-size:8px;font-weight:800;letter-spacing:2px;text-transform:uppercase;padding:1px 6px;border-radius:4px;margin-bottom:4px}
+.t-al{background:rgba(80,220,100,.2);color:#7af08a}
+.t-te{background:rgba(255,90,90,.2);color:#ff9090}
+.t-di{background:rgba(255,200,50,.2);color:#ffe070}
+.t-co{background:rgba(80,180,255,.2);color:#90d8ff}
+.rp-desc{font-size:9.5px;color:rgba(255,255,255,.5);line-height:1.4}
+
+.footer{font-size:9px;letter-spacing:3px;text-transform:uppercase;color:rgba(255,255,255,.28);font-weight:700}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="eyebrow">◈ Cartografía de Identidades</div>
+  <div class="poster-title">Ciudad de <em>la Furia</em></div>
+
+  <!-- LEGEND -->
+  <div class="legend">
+    <div class="leg-item" data-type="alianza" onclick="filterType('alianza',this)">
+      <div class="leg-dot alianza"></div>Alianza
+    </div>
+    <div class="leg-item" data-type="tension" onclick="filterType('tension',this)">
+      <div class="leg-dot tension"></div>Tensión
+    </div>
+    <div class="leg-item" data-type="disputa" onclick="filterType('disputa',this)">
+      <div class="leg-dot disputa"></div>Disputa
+    </div>
+    <div class="leg-item" data-type="conv" onclick="filterType('conv',this)">
+      <div class="leg-dot conv"></div>Convergencia
+    </div>
+  </div>
+
+  <!-- MAP -->
+  <div class="map-container">
+    <svg class="map-svg" viewBox="0 0 500 750" xmlns="http://www.w3.org/2000/svg" id="mapSvg">
+
+      <!-- shadow -->
+      <path transform="translate(5,8)"
+        d="M196 22 C215 10 238 8 258 14 C278 20 292 36 310 42 C330 50 352 44 368 58 C386 74 385 98 392 118 C400 142 415 158 418 184 C422 212 410 235 408 262 C406 290 416 312 412 340 C408 368 392 386 385 414 C377 444 378 472 366 500 C353 528 332 544 314 564 C295 584 276 594 258 606 C240 618 224 632 206 638 C186 646 165 643 147 632 C128 621 116 604 106 584 C95 562 90 538 88 514 C85 488 90 462 88 436 C85 408 74 384 72 356 C70 326 80 298 78 268 C76 238 62 214 65 184 C68 152 84 128 94 100 C104 72 102 44 118 28 C134 12 172 10 196 22Z"
+        fill="rgba(0,0,0,0.2)" style="filter:blur(12px)"/>
+
+      <!-- city silhouette -->
+      <path d="M196 22 C215 10 238 8 258 14 C278 20 292 36 310 42 C330 50 352 44 368 58 C386 74 385 98 392 118 C400 142 415 158 418 184 C422 212 410 235 408 262 C406 290 416 312 412 340 C408 368 392 386 385 414 C377 444 378 472 366 500 C353 528 332 544 314 564 C295 584 276 594 258 606 C240 618 224 632 206 638 C186 646 165 643 147 632 C128 621 116 604 106 584 C95 562 90 538 88 514 C85 488 90 462 88 436 C85 408 74 384 72 356 C70 326 80 298 78 268 C76 238 62 214 65 184 C68 152 84 128 94 100 C104 72 102 44 118 28 C134 12 172 10 196 22Z"
+        fill="#f5eedb" stroke="#ddd0aa" stroke-width="3"/>
+
+      <!-- terrain shading -->
+      <path d="M128 158 C168 143 212 153 248 146 C284 139 314 148 344 160 C364 170 371 190 359 208 C345 228 317 236 287 230 C257 224 234 213 207 218 C179 224 157 236 141 224 C123 210 110 176 128 158Z" fill="rgba(195,180,140,.15)"/>
+      <path d="M106 388 C136 373 166 380 193 374 C223 367 246 353 276 358 C303 363 320 380 316 404 C311 426 288 440 260 443 C232 446 206 434 183 422 C158 408 138 414 122 402 C106 388 98 396 106 388Z" fill="rgba(195,180,140,.13)"/>
+
+      <!-- river -->
+      <path d="M218 30 C224 70 220 115 226 160 C232 205 244 238 240 285 C236 330 218 358 216 405 C214 450 226 480 222 530 C218 574 208 604 206 638"
+        fill="none" stroke="rgba(100,170,210,.32)" stroke-width="7" stroke-linecap="round"/>
+      <path d="M218 30 C224 70 220 115 226 160 C232 205 244 238 240 285 C236 330 218 358 216 405 C214 450 226 480 222 530 C218 574 208 604 206 638"
+        fill="none" stroke="rgba(160,215,240,.18)" stroke-width="3" stroke-linecap="round"/>
+
+      <!-- green patches -->
+      <ellipse cx="158" cy="118" rx="24" ry="16" fill="rgba(100,175,70,.22)"/>
+      <ellipse cx="355" cy="148" rx="20" ry="14" fill="rgba(100,175,70,.2)"/>
+      <ellipse cx="108" cy="400" rx="18" ry="13" fill="rgba(100,175,70,.2)"/>
+      <ellipse cx="370" cy="430" rx="16" ry="11" fill="rgba(100,175,70,.18)"/>
+      <ellipse cx="200" cy="580" rx="18" ry="12" fill="rgba(100,175,70,.18)"/>
+
+      <!-- palms -->
+      <g transform="translate(52,35) scale(.72)" opacity=".8">
+        <rect x="-3" y="0" width="6" height="38" rx="3" fill="#4a7228"/>
+        <ellipse cx="-16" cy="-2" rx="20" ry="7" fill="#5a8a30" transform="rotate(-28)"/>
+        <ellipse cx="16" cy="-2" rx="20" ry="7" fill="#4a7a28" transform="rotate(28)"/>
+        <ellipse cx="0" cy="-6" rx="15" ry="6" fill="#6a9c3a" transform="rotate(-4)"/>
+      </g>
+      <g transform="translate(432,25) scale(.68)" opacity=".75">
+        <rect x="-3" y="0" width="6" height="34" rx="3" fill="#4a7228"/>
+        <ellipse cx="-14" cy="-2" rx="18" ry="6" fill="#5a8a30" transform="rotate(-25)"/>
+        <ellipse cx="14" cy="-2" rx="18" ry="6" fill="#4a7a28" transform="rotate(25)"/>
+        <ellipse cx="0" cy="-5" rx="13" ry="5" fill="#6a9c3a"/>
+      </g>
+      <g transform="translate(84,698) scale(.58)" opacity=".6">
+        <rect x="-3" y="-30" width="6" height="30" rx="3" fill="#4a7228"/>
+        <ellipse cx="-12" cy="-32" rx="16" ry="6" fill="#5a8a30" transform="rotate(-20)"/>
+        <ellipse cx="12" cy="-32" rx="16" ry="6" fill="#4a7a28" transform="rotate(20)"/>
+        <ellipse cx="0" cy="-36" rx="11" ry="5" fill="#6a9c3a"/>
+      </g>
+      <g transform="translate(412,690) scale(.6)" opacity=".62">
+        <rect x="-3" y="-32" width="6" height="32" rx="3" fill="#4a7228"/>
+        <ellipse cx="-13" cy="-34" rx="17" ry="6" fill="#5a8a30" transform="rotate(-22)"/>
+        <ellipse cx="13" cy="-34" rx="17" ry="6" fill="#4a7a28" transform="rotate(22)"/>
+        <ellipse cx="0" cy="-38" rx="12" ry="5" fill="#6a9c3a"/>
+      </g>
+
+      <!-- city name watermark -->
+      <text x="248" y="400" font-family="Lobster,cursive" font-size="80"
+        fill="rgba(160,130,80,.12)" text-anchor="middle"
+        transform="rotate(-5 248 400)" pointer-events="none">Cali</text>
+
+      <!-- ══ RELATION LINES – drawn behind actors ══
+           Each path goes from actor center to actor center.
+           Actor coordinates:
+             salseros   250,108
+             amb        148,168
+             ani        360,162
+             teatreros  134,265
+             ciclistas  332,248
+             lgbtq      246,242
+             skaters    290,330
+             feministas 144,350
+             grafiteros 374,368
+             barras     230,448
+             antitau    360,468
+             raperos    138,462
+             vendedores 326,540
+             lideres    190,560
+      -->
+      <g id="relGroup">
+        <!-- ALIANZAS (verde) -->
+        <path id="rl-amb-cic" class="rel-line alianza"
+          d="M148,168 Q200,155 332,248"
+          data-a="🌿 Ambientalistas" data-b="🚲 Ciclistas" data-type="alianza"
+          data-desc="Frente común por movilidad sostenible y defensa del espacio verde."/>
+
+        <path id="rl-amb-ani" class="rel-line alianza"
+          d="M148,168 Q248,130 360,162"
+          data-a="🌿 Ambientalistas" data-b="🐾 Animalistas" data-type="alianza"
+          data-desc="Coalición por bienestar animal y protección de ecosistemas urbanos."/>
+
+        <path id="rl-ant-ani" class="rel-line alianza"
+          d="M360,468 Q400,320 360,162"
+          data-a="🚫 Antitaurinos" data-b="🐾 Animalistas" data-type="alianza"
+          data-desc="Frente jurídico unificado contra el maltrato animal institucionalizado."/>
+
+        <path id="rl-fem-lgbt" class="rel-line alianza"
+          d="M144,350 Q195,290 246,242"
+          data-a="✊ Feministas" data-b="🏳️‍🌈 LGBTQ+" data-type="alianza"
+          data-desc="Agendas articuladas de derechos, visibilidad y seguridad urbana."/>
+
+        <path id="rl-lid-ven" class="rel-line alianza"
+          d="M190,560 Q258,548 326,540"
+          data-a="🏘️ Líderes" data-b="🛒 Vendedores" data-type="alianza"
+          data-desc="Los líderes defienden a vendedores frente a operativos de desalojo."/>
+
+        <!-- TENSIONES (rojo) -->
+        <path id="rl-bar-amb" class="rel-line tension"
+          d="M230,448 Q185,310 148,168"
+          data-a="⚽ Barras" data-b="🌿 Ambientalistas" data-type="tension"
+          data-desc="Concentraciones pre-partido dañan zonas verdes y espacios compartidos."/>
+
+        <path id="rl-bar-lid" class="rel-line tension"
+          d="M230,448 Q210,504 190,560"
+          data-a="⚽ Barras" data-b="🏘️ Líderes" data-type="tension"
+          data-desc="Las barras controlan simbólicamente barrios que los líderes intentan organizar."/>
+
+        <path id="rl-fem-sal" class="rel-line tension"
+          d="M144,350 Q196,230 250,108"
+          data-a="✊ Feministas" data-b="💃 Salseros" data-type="tension"
+          data-desc="Debate sobre hipersexualización en la cultura salsera y roles de género."/>
+
+        <!-- DISPUTAS (amarillo) -->
+        <path id="rl-ven-ska" class="rel-line disputa"
+          d="M326,540 Q308,435 290,330"
+          data-a="🛒 Vendedores" data-b="🛹 Skaters" data-type="disputa"
+          data-desc="Compiten por el mismo espacio: andenes, plazas y centros a cielo abierto."/>
+
+        <path id="rl-tea-ska" class="rel-line disputa"
+          d="M134,265 Q212,298 290,330"
+          data-a="🎭 Teatreros" data-b="🛹 Skaters" data-type="disputa"
+          data-desc="Compiten por plazas públicas como espacio de actuación y práctica urbana."/>
+
+        <!-- CONVERGENCIAS (azul claro) -->
+        <path id="rl-sal-tea" class="rel-line conv"
+          d="M250,108 Q192,186 134,265"
+          data-a="💃 Salseros" data-b="🎭 Teatreros" data-type="conv"
+          data-desc="Disputan juntos plazas y parques como escenarios culturales vivos."/>
+
+        <path id="rl-ska-gra" class="rel-line conv"
+          d="M290,330 Q332,349 374,368"
+          data-a="🛹 Skaters" data-b="🎨 Grafiteros" data-type="conv"
+          data-desc="Cultura urbana compartida: espacios, lenguajes y represión policial."/>
+
+        <path id="rl-rap-gra" class="rel-line conv"
+          d="M138,462 Q256,415 374,368"
+          data-a="🎤 Raperos" data-b="🎨 Grafiteros" data-type="conv"
+          data-desc="Pilares del Hip-Hop local. Narran la ciudad desde los barrios periféricos."/>
+
+        <path id="rl-amb-cic2" class="rel-line conv"
+          d="M246,242 Q289,287 332,248"
+          data-a="🏳️‍🌈 LGBTQ+" data-b="💃 Salseros" data-type="conv"
+          data-desc="El Orgullo y la cultura salsera confluyen en la apropiación festiva de la ciudad."/>
+      </g>
+
+      <!-- ══ ACTORS – on top of lines ══ -->
+
+      <!-- 1. SALSEROS -->
+      <g class="actor" id="ac-salseros" style="animation-delay:.08s"
+         data-name="Salseros" data-emoji="💃" data-color="#e04010"
+         data-t1="Salsa" data-t2="Cultura" data-t3="Identidad"
+         data-desc="La salsa es el alma de Cali. Escuelas de baile, salsódromos y el Festival Petronio Álvarez marcan el territorio simbólico de esta identidad vibrante.">
+        <ellipse cx="250" cy="108" rx="32" ry="32" fill="#c83008" class="bubble"/>
+        <ellipse cx="250" cy="108" rx="29" ry="29" fill="#e84818"/>
+        <text x="250" y="118" text-anchor="middle" font-size="26">💃</text>
+        <text x="250" y="147" text-anchor="middle" font-family="Nunito,sans-serif" font-size="8" font-weight="800" fill="#7a2808" letter-spacing=".5">SALSEROS</text>
+      </g>
+
+      <!-- 2. AMBIENTALISTAS -->
+      <g class="actor" id="ac-amb" style="animation-delay:.16s"
+         data-name="Ambientalistas" data-emoji="🌿" data-color="#2da85e"
+         data-t1="Territorio" data-t2="Parques" data-t3="Ecología"
+         data-desc="Defienden humedales, parques y corredores verdes. Luchan contra la urbanización desordenada y promueven la movilidad sostenible.">
+        <ellipse cx="148" cy="168" rx="26" ry="26" fill="#227848" class="bubble"/>
+        <ellipse cx="148" cy="168" rx="23" ry="23" fill="#32a85c"/>
+        <text x="148" y="177" text-anchor="middle" font-size="21">🌿</text>
+        <text x="148" y="202" text-anchor="middle" font-family="Nunito,sans-serif" font-size="7.5" font-weight="800" fill="#1a5830" letter-spacing=".3">AMBIENTALISTAS</text>
+      </g>
+
+      <!-- 3. ANIMALISTAS -->
+      <g class="actor" id="ac-ani" style="animation-delay:.24s"
+         data-name="Animalistas" data-emoji="🐾" data-color="#1a7fd4"
+         data-t1="Derechos animales" data-t2="Refugios" data-t3="Ley"
+         data-desc="Trabajan por el bienestar animal. Gestionan refugios, campañas de esterilización y litigio ante el concejo.">
+        <ellipse cx="360" cy="162" rx="26" ry="26" fill="#1060a8" class="bubble"/>
+        <ellipse cx="360" cy="162" rx="23" ry="23" fill="#1878d0"/>
+        <text x="360" y="171" text-anchor="middle" font-size="21">🐾</text>
+        <text x="360" y="196" text-anchor="middle" font-family="Nunito,sans-serif" font-size="7.5" font-weight="800" fill="#0a4878" letter-spacing=".3">ANIMALISTAS</text>
+      </g>
+
+      <!-- 4. TEATREROS -->
+      <g class="actor" id="ac-tea" style="animation-delay:.32s"
+         data-name="Teatreros" data-emoji="🎭" data-color="#8828c0"
+         data-t1="Teatro" data-t2="Artes escénicas" data-t3="Espacio público"
+         data-desc="Grupos de teatro callejero, circo social y artes escénicas que ocupan plazas como escenario político y cultural.">
+        <ellipse cx="134" cy="265" rx="25" ry="25" fill="#6010a0" class="bubble"/>
+        <ellipse cx="134" cy="265" rx="22" ry="22" fill="#8828c0"/>
+        <text x="134" y="274" text-anchor="middle" font-size="20">🎭</text>
+        <text x="134" y="298" text-anchor="middle" font-family="Nunito,sans-serif" font-size="7.5" font-weight="800" fill="#5010a0" letter-spacing=".3">TEATREROS</text>
+      </g>
+
+      <!-- 5. CICLISTAS -->
+      <g class="actor" id="ac-cic" style="animation-delay:.40s"
+         data-name="Ciclistas Urbanos" data-emoji="🚲" data-color="#4aaa28"
+         data-t1="Ciclovías" data-t2="Movilidad" data-t3="Ecología"
+         data-desc="Exigen ciclovías seguras y carriles exclusivos. Aliados estratégicos del movimiento ambientalista.">
+        <ellipse cx="332" cy="248" rx="24" ry="24" fill="#388018" class="bubble"/>
+        <ellipse cx="332" cy="248" rx="21" ry="21" fill="#52a828"/>
+        <text x="332" y="257" text-anchor="middle" font-size="19">🚲</text>
+        <text x="332" y="281" text-anchor="middle" font-family="Nunito,sans-serif" font-size="7.5" font-weight="800" fill="#286010" letter-spacing=".3">CICLISTAS</text>
+      </g>
+
+      <!-- 6. LGBTQ+ -->
+      <g class="actor" id="ac-lgbt" style="animation-delay:.48s"
+         data-name="Comunidad LGBTQ+" data-emoji="🏳️‍🌈" data-color="#d48800"
+         data-t1="Diversidad" data-t2="Orgullo" data-t3="Visibilidad"
+         data-desc="Colectivos que celebran y defienden la diversidad en el espacio urbano. La Marcha del Orgullo es su máxima expresión de apropiación de la ciudad.">
+        <ellipse cx="246" cy="242" rx="24" ry="24" fill="#b07000" class="bubble"/>
+        <ellipse cx="246" cy="242" rx="21" ry="21" fill="#d49000"/>
+        <text x="246" y="251" text-anchor="middle" font-size="19">🏳️‍🌈</text>
+        <text x="246" y="275" text-anchor="middle" font-family="Nunito,sans-serif" font-size="7.5" font-weight="800" fill="#805000" letter-spacing=".3">LGBTQ+</text>
+      </g>
+
+      <!-- 7. SKATERS -->
+      <g class="actor" id="ac-ska" style="animation-delay:.56s"
+         data-name="Skaters" data-emoji="🛹" data-color="#e08808"
+         data-t1="Skate" data-t2="Cultura urbana" data-t3="Street art"
+         data-desc="Reclaman calles, plazas y parques como sus pistas. Conflicto permanente por skate parks. Expresión artística a través del grafiti.">
+        <ellipse cx="290" cy="330" rx="25" ry="25" fill="#b06800" class="bubble"/>
+        <ellipse cx="290" cy="330" rx="22" ry="22" fill="#d88008"/>
+        <text x="290" y="339" text-anchor="middle" font-size="20">🛹</text>
+        <text x="290" y="363" text-anchor="middle" font-family="Nunito,sans-serif" font-size="7.5" font-weight="800" fill="#804800" letter-spacing=".3">SKATERS</text>
+      </g>
+
+      <!-- 8. FEMINISTAS -->
+      <g class="actor" id="ac-fem" style="animation-delay:.64s"
+         data-name="Colectivos Feministas" data-emoji="✊" data-color="#d02888"
+         data-t1="Feminismo" data-t2="Derechos" data-t3="8M"
+         data-desc="Articulan luchas por los derechos de las mujeres, la seguridad urbana y la visibilidad en el espacio público.">
+        <ellipse cx="144" cy="350" rx="26" ry="26" fill="#a01870" class="bubble"/>
+        <ellipse cx="144" cy="350" rx="23" ry="23" fill="#c82080"/>
+        <text x="144" y="359" text-anchor="middle" font-size="21">✊</text>
+        <text x="144" y="384" text-anchor="middle" font-family="Nunito,sans-serif" font-size="7.5" font-weight="800" fill="#801058" letter-spacing=".3">FEMINISTAS</text>
+      </g>
+
+      <!-- 9. GRAFITEROS -->
+      <g class="actor" id="ac-gra" style="animation-delay:.72s"
+         data-name="Grafiteros" data-emoji="🎨" data-color="#2090a8"
+         data-t1="Arte urbano" data-t2="Murales" data-t3="Resistencia"
+         data-desc="Artistas que intervienen muros, puentes y andenes. Reivindican el espacio público como lienzo colectivo.">
+        <ellipse cx="374" cy="368" rx="26" ry="26" fill="#186878" class="bubble"/>
+        <ellipse cx="374" cy="368" rx="23" ry="23" fill="#2290a8"/>
+        <text x="374" y="377" text-anchor="middle" font-size="21">🎨</text>
+        <text x="374" y="402" text-anchor="middle" font-family="Nunito,sans-serif" font-size="7.5" font-weight="800" fill="#105068" letter-spacing=".3">GRAFITEROS</text>
+      </g>
+
+      <!-- 10. BARRAS BRAVAS -->
+      <g class="actor" id="ac-bar" style="animation-delay:.80s"
+         data-name="Barras Bravas" data-emoji="⚽" data-color="#c82828"
+         data-t1="Fútbol" data-t2="Territorio" data-t3="Identidad barrial"
+         data-desc="Grupos ultras que disputan el control simbólico de estadios, barrios y calles. Mezclan pasión futbolera, arte urbano y ritos colectivos.">
+        <ellipse cx="230" cy="448" rx="30" ry="30" fill="#a01818" class="bubble"/>
+        <ellipse cx="230" cy="448" rx="27" ry="27" fill="#c82828"/>
+        <text x="230" y="458" text-anchor="middle" font-size="24">⚽</text>
+        <text x="230" y="488" text-anchor="middle" font-family="Nunito,sans-serif" font-size="7.5" font-weight="800" fill="#801010" letter-spacing=".3">BARRAS BRAVAS</text>
+      </g>
+
+      <!-- 11. ANTITAURINOS -->
+      <g class="actor" id="ac-ant" style="animation-delay:.88s"
+         data-name="Antitaurinos" data-emoji="🚫" data-color="#d4aa00"
+         data-t1="Abolición" data-t2="Cultura" data-t3="Litigio"
+         data-desc="Movimiento por la prohibición de las corridas de toros. Proponen reconvertir la plaza en espacio cultural y recreativo para todos.">
+        <ellipse cx="360" cy="468" rx="26" ry="26" fill="#a88000" class="bubble"/>
+        <ellipse cx="360" cy="468" rx="23" ry="23" fill="#cca000"/>
+        <text x="360" y="477" text-anchor="middle" font-size="21">🚫</text>
+        <text x="360" y="501" text-anchor="middle" font-family="Nunito,sans-serif" font-size="7.5" font-weight="800" fill="#806000" letter-spacing=".3">ANTITAURINOS</text>
+      </g>
+
+      <!-- 12. RAPEROS -->
+      <g class="actor" id="ac-rap" style="animation-delay:.96s"
+         data-name="Raperos & Hip-Hop" data-emoji="🎤" data-color="#3838a8"
+         data-t1="Hip-hop" data-t2="Rap" data-t3="Barrio"
+         data-desc="Cultura hip-hop que articula denuncia social e identidad barrial. Freestyle en parques, batallas de gallos y producción musical underground.">
+        <ellipse cx="138" cy="462" rx="25" ry="25" fill="#202070" class="bubble"/>
+        <ellipse cx="138" cy="462" rx="22" ry="22" fill="#3838a8"/>
+        <text x="138" y="471" text-anchor="middle" font-size="20">🎤</text>
+        <text x="138" y="495" text-anchor="middle" font-family="Nunito,sans-serif" font-size="7.5" font-weight="800" fill="#181860" letter-spacing=".3">RAPEROS</text>
+      </g>
+
+      <!-- 13. VENDEDORES -->
+      <g class="actor" id="ac-ven" style="animation-delay:1.04s"
+         data-name="Vendedores Ambulantes" data-emoji="🛒" data-color="#c85820"
+         data-t1="Economía informal" data-t2="Espacio público" data-t3="Subsistencia"
+         data-desc="Trabajadores informales que habitan y disputan el espacio público cotidianamente. Tensión con operativos policiales y políticas de 'recuperación' urbana.">
+        <ellipse cx="326" cy="540" rx="26" ry="26" fill="#a04010" class="bubble"/>
+        <ellipse cx="326" cy="540" rx="23" ry="23" fill="#c05818"/>
+        <text x="326" y="549" text-anchor="middle" font-size="21">🛒</text>
+        <text x="326" y="574" text-anchor="middle" font-family="Nunito,sans-serif" font-size="7.5" font-weight="800" fill="#7a3010" letter-spacing=".3">VENDEDORES</text>
+      </g>
+
+      <!-- 14. LÍDERES BARRIALES -->
+      <g class="actor" id="ac-lid" style="animation-delay:1.12s"
+         data-name="Líderes Barriales" data-emoji="🏘️" data-color="#7a9028"
+         data-t1="Comunidad" data-t2="Gestión" data-t3="Barrio"
+         data-desc="Líderes comunitarios que articulan las demandas de los barrios periféricos ante el Estado. Mediadores entre comunidad e instituciones.">
+        <ellipse cx="190" cy="560" rx="26" ry="26" fill="#586018" class="bubble"/>
+        <ellipse cx="190" cy="560" rx="23" ry="23" fill="#789028"/>
+        <text x="190" y="569" text-anchor="middle" font-size="21">🏘️</text>
+        <text x="190" y="594" text-anchor="middle" font-family="Nunito,sans-serif" font-size="7.5" font-weight="800" fill="#485010" letter-spacing=".3">LÍDERES BARRIALES</text>
+      </g>
+
+    </svg>
+  </div>
+
+  <!-- CONTROLS -->
+  <div class="controls">
+    <button class="ctrl-btn" id="btnAll" onclick="toggleAll()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <circle cx="6" cy="12" r="3"/><circle cx="18" cy="6" r="3"/><circle cx="18" cy="18" r="3"/>
+        <line x1="9" y1="10.5" x2="15" y2="7.5"/><line x1="9" y1="13.5" x2="15" y2="16.5"/>
+      </svg>
+      Mostrar todas las relaciones
+    </button>
+    <button class="ctrl-btn" id="btnPanel" onclick="togglePanel()">
+      📋 Ver ficha de relaciones
+    </button>
+  </div>
+
+  <!-- RELATIONS PANEL -->
+  <div class="rel-panel" id="relPanel">
+    <div class="rp-title">🕸️ Red de relaciones · Ciudad de la Furia</div>
+    <div class="rp-grid" id="rpGrid"></div>
+  </div>
+
+  <div class="footer">Cartografía de Identidades · Ciudad de la Furia · v5.0</div>
+</div>
+
+<!-- ACTOR TOOLTIP -->
+<div class="tip" id="tip">
+  <div class="tip-box">
+    <span class="tip-emoji" id="tipE"></span>
+    <div class="tip-group">Actor Social · Ciudad de la Furia</div>
+    <div class="tip-name" id="tipN"></div>
+    <div class="tip-desc" id="tipD"></div>
+    <div class="tip-tags" id="tipT"></div>
+  </div>
+</div>
+
+<!-- LINE TOOLTIP -->
+<div class="line-tip" id="lineTip">
+  <div class="line-tip-box">
+    <div class="lt-type" id="ltType"></div>
+    <div class="lt-actors" id="ltActors"></div>
+    <div class="lt-desc" id="ltDesc"></div>
+  </div>
+</div>
+
+<script>
+// ── DATA ──
+const relations = [
+  {id:'rl-amb-cic', type:'alianza', a:'🌿 Ambientalistas', b:'🚲 Ciclistas', desc:'Frente común por movilidad sostenible y defensa del espacio verde urbano.'},
+  {id:'rl-amb-ani', type:'alianza', a:'🌿 Ambientalistas', b:'🐾 Animalistas', desc:'Coalición por bienestar animal y protección de ecosistemas urbanos.'},
+  {id:'rl-ant-ani', type:'alianza', a:'🚫 Antitaurinos', b:'🐾 Animalistas', desc:'Frente jurídico unificado contra el maltrato animal institucionalizado.'},
+  {id:'rl-fem-lgbt',type:'alianza', a:'✊ Feministas', b:'🏳️‍🌈 LGBTQ+', desc:'Agendas articuladas de derechos, visibilidad y seguridad urbana.'},
+  {id:'rl-lid-ven', type:'alianza', a:'🏘️ Líderes', b:'🛒 Vendedores', desc:'Los líderes defienden a vendedores frente a operativos de desalojo.'},
+  {id:'rl-bar-amb', type:'tension', a:'⚽ Barras', b:'🌿 Ambientalistas', desc:'Concentraciones pre-partido dañan zonas verdes y espacios compartidos.'},
+  {id:'rl-bar-lid', type:'tension', a:'⚽ Barras', b:'🏘️ Líderes', desc:'Las barras controlan simbólicamente barrios que los líderes organizan.'},
+  {id:'rl-fem-sal', type:'tension', a:'✊ Feministas', b:'💃 Salseros', desc:'Debate sobre hipersexualización en la cultura salsera y roles de género.'},
+  {id:'rl-ven-ska', type:'disputa', a:'🛒 Vendedores', b:'🛹 Skaters', desc:'Compiten por el mismo espacio: andenes, plazas, centros a cielo abierto.'},
+  {id:'rl-tea-ska', type:'disputa', a:'🎭 Teatreros', b:'🛹 Skaters', desc:'Compiten por plazas públicas como espacio de actuación y práctica.'},
+  {id:'rl-sal-tea', type:'conv',    a:'💃 Salseros', b:'🎭 Teatreros', desc:'Disputan juntos plazas y parques como escenarios culturales vivos.'},
+  {id:'rl-ska-gra', type:'conv',    a:'🛹 Skaters', b:'🎨 Grafiteros', desc:'Cultura urbana compartida: espacios, lenguajes y represión policial.'},
+  {id:'rl-rap-gra', type:'conv',    a:'🎤 Raperos', b:'🎨 Grafiteros', desc:'Pilares del Hip-Hop local. Narran la ciudad desde los barrios.'},
+  {id:'rl-amb-cic2',type:'conv',    a:'🏳️‍🌈 LGBTQ+', b:'💃 Salseros', desc:'El Orgullo y la cultura salsera confluyen en la apropiación festiva de la ciudad.'},
+];
+
+const typeLabel = {alianza:'Alianza',tension:'Tensión',disputa:'Disputa',conv:'Convergencia'};
+const typeColor = {alianza:'#6ef07a',tension:'#ff7070',disputa:'#ffe050',conv:'#70d8ff'};
+const typeClass = {alianza:'t-al',tension:'t-te',disputa:'t-di',conv:'t-co'};
+
+// Build panel cards
+const grid = document.getElementById('rpGrid');
+relations.forEach(r => {
+  const c = document.createElement('div');
+  c.className = 'rp-card';
+  c.innerHTML = `<div class="rp-actors">${r.a} ↔ ${r.b}</div><span class="rp-type ${typeClass[r.type]}">${typeLabel[r.type]}</span><div class="rp-desc">${r.desc}</div>`;
+  c.addEventListener('mouseenter', () => { highlightLine(r.id); });
+  c.addEventListener('mouseleave', () => { if (allOn) showAllLines(); else hideAllLines(); });
+  grid.appendChild(c);
+});
+
+// ── STATE ──
+let allOn = false;
+let activeFilter = null;
+
+// ── TOGGLE ALL LINES ──
+function toggleAll() {
+  allOn = !allOn;
+  document.getElementById('btnAll').classList.toggle('on', allOn);
+  document.getElementById('btnAll').textContent = allOn ? '✕ Ocultar relaciones' : '  Mostrar todas las relaciones';
+  if (allOn) showAllLines(); else hideAllLines();
+}
+
+function showAllLines() {
+  document.querySelectorAll('.rel-line').forEach(l => {
+    if (!activeFilter || l.classList.contains(activeFilter)) l.classList.add('show');
+    else l.classList.remove('show');
+  });
+}
+function hideAllLines() {
+  document.querySelectorAll('.rel-line').forEach(l => l.classList.remove('show'));
+}
+function highlightLine(id) {
+  document.querySelectorAll('.rel-line').forEach(l => l.classList.remove('show'));
+  const el = document.getElementById(id);
+  if (el) el.classList.add('show');
+}
+
+// ── FILTER BY TYPE ──
+function filterType(type, btn) {
+  const items = document.querySelectorAll('.leg-item');
+  if (activeFilter === type) {
+    activeFilter = null;
+    items.forEach(i => i.classList.remove('active'));
+    if (allOn) showAllLines(); else hideAllLines();
+    return;
+  }
+  activeFilter = type;
+  items.forEach(i => i.classList.toggle('active', i.dataset.type === type));
+  if (allOn) showAllLines();
+  else {
+    document.querySelectorAll('.rel-line').forEach(l => {
+      l.classList.toggle('show', l.classList.contains(type));
+    });
+  }
+}
+
+// ── TOGGLE PANEL ──
+function togglePanel() {
+  const p = document.getElementById('relPanel');
+  const b = document.getElementById('btnPanel');
+  const on = p.classList.toggle('on');
+  b.classList.toggle('on', on);
+}
+
+// ── ACTOR TOOLTIP ──
+const tip  = document.getElementById('tip');
+const tipE = document.getElementById('tipE');
+const tipN = document.getElementById('tipN');
+const tipD = document.getElementById('tipD');
+const tipT = document.getElementById('tipT');
+
+document.querySelectorAll('.actor').forEach(el => {
+  el.addEventListener('mouseenter', e => showActorTip(el, e));
+  el.addEventListener('mousemove',  e => moveTip(tip, e));
+  el.addEventListener('mouseleave', () => tip.classList.remove('on'));
+});
+
+function showActorTip(el, e) {
+  const d = el.dataset;
+  tipE.textContent = d.emoji || '';
+  tipN.textContent = d.name  || '';
+  tipN.style.color = d.color || '#fff';
+  tipD.textContent = d.desc  || '';
+  tipT.innerHTML = '';
+  [d.t1,d.t2,d.t3].filter(Boolean).forEach(t => {
+    const s = document.createElement('span');
+    s.className = 'tip-tag';
+    s.textContent = t;
+    s.style.color = d.color||'#fff';
+    s.style.borderColor = d.color||'#fff';
+    tipT.appendChild(s);
+  });
+  moveTip(tip, e);
+  tip.classList.add('on');
+}
+
+// ── LINE TOOLTIP ──
+const lineTip  = document.getElementById('lineTip');
+const ltType   = document.getElementById('ltType');
+const ltActors = document.getElementById('ltActors');
+const ltDesc   = document.getElementById('ltDesc');
+
+document.querySelectorAll('.rel-line').forEach(line => {
+  line.addEventListener('mouseenter', e => {
+    const d = line.dataset;
+    const type = d.type || 'alianza';
+    ltType.textContent  = typeLabel[type] || type;
+    ltType.style.color  = typeColor[type] || '#fff';
+    ltActors.textContent = `${d.a} ↔ ${d.b}`;
+    ltDesc.textContent   = d.desc || '';
+    moveTip(lineTip, e);
+    lineTip.classList.add('on');
+  });
+  line.addEventListener('mousemove', e => moveTip(lineTip, e));
+  line.addEventListener('mouseleave', () => lineTip.classList.remove('on'));
+});
+
+function moveTip(el, e) {
+  el.style.left = (e.clientX) + 'px';
+  el.style.top  = (e.clientY - 16) + 'px';
+}
+
+// ── AUTO-ANIMATE: cycle through relation types every 3s ──
+const types = ['alianza','tension','disputa','conv'];
+let cycleIdx = 0;
+let cycleTimer = null;
+
+function startCycle() {
+  cycleTimer = setInterval(() => {
+    if (allOn) return;
+    const type = types[cycleIdx % types.length];
+    document.querySelectorAll('.rel-line').forEach(l => {
+      l.classList.toggle('show', l.classList.contains(type));
+    });
+    // update legend highlight
+    document.querySelectorAll('.leg-item').forEach(i =>
+      i.classList.toggle('active', i.dataset.type === type));
+    cycleIdx++;
+  }, 2800);
+}
+
+// Start cycle after actors pop in
+setTimeout(() => {
+  // show first batch immediately
+  document.querySelectorAll('.rel-line.alianza').forEach(l => l.classList.add('show'));
+  document.querySelectorAll('.leg-item[data-type="alianza"]').forEach(i => i.classList.add('active'));
+  cycleIdx = 1;
+  startCycle();
+}, 1600);
+
+// Pause cycle when user takes control
+document.getElementById('btnAll').addEventListener('click', () => {
+  clearInterval(cycleTimer);
+  document.querySelectorAll('.leg-item').forEach(i => i.classList.remove('active'));
+});
+document.querySelectorAll('.leg-item').forEach(item => {
+  item.addEventListener('click', () => { clearInterval(cycleTimer); });
+});
+</script>
+</body>
+</html>
